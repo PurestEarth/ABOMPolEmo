@@ -1,0 +1,12 @@
+seqeval
+keras
+tensorflow-gpu==1.15.2
+git+https://www.github.com/keras-team/keras-contrib.git
+cython
+pyfasttext==0.4.5
+scikit-learn==0.22.2.post1
+sklearn
+python-dateutil
+nltk
+gensim
+allennlp==0.9.0
