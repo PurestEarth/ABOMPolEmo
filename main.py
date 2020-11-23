@@ -24,6 +24,11 @@ def main(args):
         model, loss = biLSTMCRF.build()
         model.compile(loss=loss, optimizer='adam')
         biLSTMCRF.train(model, x_train, y_train, epochs=args.epochs)
+        if not os.path.exists(args.output):
+            os.makedirs(args.output)
+        biLSTMCRF.save(args.output)
+
+
 
 def parse_args():
     parser = argparse.ArgumentParser(

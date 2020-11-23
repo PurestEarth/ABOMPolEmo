@@ -173,3 +173,19 @@ class BiLSTMCRF(object):
                                   callbacks=None,
                                   verbose=1,
                                   shuffle=shuffle)
+
+
+    def save(self, model_path):
+        weights_file = os.path.join(model_path, "weights.pkl")
+        params_file = os.path.join(model_path, "params.pkl")
+        with open(params_file, 'w') as f:
+            params = self.model.to_json()
+            json.dump(json.loads(params), f, sort_keys=True, indent=4)
+            self.model.save_weights(weights_file)
+
+
+    def load_model(weights_file, params_file):
+        with open(params_file) as f:
+            self.model = model_from_json(f.read(), custom_objects={'CRF': CRF})
+            self.model.load_weights(weights_file)
+        return model
