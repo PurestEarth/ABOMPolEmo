@@ -5,11 +5,11 @@ import torch.nn.functional as F
 
 class XLMRForTokenClassification(nn.Module):
 
-    def __init__(self, pretrained_path, num_labels, hidden_size, dropout=0.2, label_ignore_idx=0,
+    def __init__(self, pretrained_path, n_labels, hidden_size, dropout=0.2, label_ignore_idx=0,
                 head_init_range=0.04, device='cuda'):
         super().__init__()
 
-        self.n_labels = num_labels
+        self.n_labels = n_labels
         
         self.linear_1 = nn.Linear(hidden_size, hidden_size)
         self.classification_head = nn.Linear(hidden_size, n_labels)

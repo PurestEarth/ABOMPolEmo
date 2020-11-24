@@ -47,15 +47,17 @@ def load_from_folder(path):
 
 def get_examples(path, set_type='train'):
     examples = []
+    label_list = []
     x_train, y_train = load_from_folder(path)
     for i in range(0, len(x_train)):
         guid = "%s-%s" % (set_type, i)
         text_a = ' '.join(x_train[i])
         text_b = None
-        label = ' '.join(y_train[i])
+        label = y_train[i]
+        label_list.extend(y_train[i])
         examples.append(InputExample(
             guid=guid, text_a=text_a, text_b=text_b, label=label))
-    return examples
+    return examples, list(set(label_list))
 
 
 def convert_examples_to_features(examples, label_list, max_seq_length, encode_method):
@@ -75,7 +77,6 @@ def convert_examples_to_features(examples, label_list, max_seq_length, encode_me
         valid = []
         label_mask = []
         token_ids = []
-       
         for i, word in enumerate(textlist):  
             tokens = encode_method(word.strip())  # word token ids   
             token_ids.extend(tokens)  # all sentence token ids
@@ -114,7 +115,6 @@ def convert_examples_to_features(examples, label_list, max_seq_length, encode_me
         label_ids = []
         for i, _ in enumerate(token_ids):
             label_ids.append(label_map[labels[i]])
-
         assert len(token_ids) == len(label_ids)
         assert len(valid) == len(label_ids)
         input_mask = [1] * len(token_ids)
@@ -151,6 +151,41 @@ def create_dataset(features):
 
     return TensorDataset(
         all_input_ids, all_label_ids, all_lmask_ids, all_valid_ids)
+
+
+def save_params(model_path, dropout, num_labels, label_list):
+    data = {}
+    data['dropout'] = dropout
+    data['num_labels'] = num_labels
+    data['label_list'] = label_list
+    with open(model_path + '/params.json', 'w') as f:
+        json.dump(data, f)
+
+
+def append_pending(ignored_label, pending_token_ids, pending_input_mask, pending_label_ids, pending_valid,
+                   pending_label_mask, max_seq_length, label_map, ex_index=None, example=None):
+    while len(pending_token_ids) < max_seq_length:
+        pending_token_ids.append(1)  # token padding idx
+        pending_input_mask.append(0)
+        pending_label_ids.append(label_map[ignored_label])  # label ignore idx
+        pending_valid.append(0)
+        pending_label_mask.append(0)
+
+    while len(pending_label_ids) < max_seq_length:
+        pending_label_ids.append(label_map[ignored_label])
+        pending_label_mask.append(0)
+
+    assert len(pending_token_ids) == max_seq_length
+    assert len(pending_input_mask) == max_seq_length
+    assert len(pending_label_ids) == max_seq_length
+    assert len(pending_valid) == max_seq_length
+    assert len(pending_label_mask) == max_seq_length
+
+    return InputFeatures(input_ids=pending_token_ids,
+                         input_mask=pending_input_mask,
+                         label_id=pending_label_ids,
+                         valid_ids=pending_valid,
+                         label_mask=pending_label_mask)
 
 
 class NERSequence(Sequence):
