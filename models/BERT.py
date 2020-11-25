@@ -1,5 +1,5 @@
 import os
-from utils.data_utils import get_examples, convert_examples_to_features, create_dataset, save_params
+from utils.data_utils import get_examples, convert_examples_to_features, create_dataset
 from utils.train_utils import evaluate_model
 from models.xlmr.xlmr_for_token_classification import XLMRForTokenClassification
 from pytorch_transformers import AdamW, WarmupLinearSchedule
