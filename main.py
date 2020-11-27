@@ -1,7 +1,7 @@
 import argparse
 from utils.data_utils import load_from_folder
 from models.LSTM import BiLSTMCRF
-from models.BERT import BERT
+from models.Transformers import Transformers
 
 def main(args):
     if args.model == 'LSTM':
@@ -26,17 +26,19 @@ def main(args):
             os.makedirs(args.output)
         biLSTMCRF.save(args.output)
 
-    if args.model == 'BERT':
-        bert = BERT()
-        bert.train(
+    else:
+        transformers = Transformers()
+        transformers.train(
             output_dir=args.output,
             train_batch_size=args.train_batch_size, 
             gradient_accumulation_steps=args.gradient_accumulation_steps, 
-            seed=args.seed, 
+            seed=args.seed,
+            max_seq_length=args.max_seq_length,
             epochs=args.epochs, 
             data_path=args.input, 
             pretrained_path=args.pretrained, 
-            valid_path=args.valid
+            valid_path=args.valid,
+            model_name=args.model
         )
 
 
@@ -50,6 +52,7 @@ def parse_args():
     parser.add_argument('--embedding', metavar='PATH', help='path to embeddings')
     parser.add_argument('--pretrained', metavar='PATH', help='path to pretrained model')
     parser.add_argument('--seed', type=int, default=44, help='seed')
+    parser.add_argument('--max_seq_length', type=int, default=128, help='max sequence length')
     parser.add_argument('--gradient_accumulation_steps', type=int, default=1, help='gradient accumulation steps')
     parser.add_argument('--epochs', required=True, default=32, type=int, metavar='num', help='number of epochs')
     parser.add_argument('--char', default=True, help='use char embedding built from training data')

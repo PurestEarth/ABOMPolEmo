@@ -1,7 +1,8 @@
 import os
-from utils.data_utils import get_examples, convert_examples_to_features, create_dataset
+from utils.data_utils import get_examples, convert_examples_to_features, create_dataset, save_params
 from utils.train_utils import evaluate_model
 from models.xlmr.xlmr_for_token_classification import XLMRForTokenClassification
+from models.reformer import Reformer
 from pytorch_transformers import AdamW, WarmupLinearSchedule
 from torch.utils.data import DataLoader, RandomSampler
 import random
@@ -11,12 +12,13 @@ import logging
 import sys
 
 
-class BERT:
+class Transformers:
 
     def train(self, output_dir, train_batch_size, gradient_accumulation_steps, seed,
               epochs, data_path, pretrained_path, valid_path, no_cuda=False, dropout=0.3,
               weight_decay=0.01, warmup_proportion=0.1, learning_rate=5e-5, adam_epsilon=1e-8,
-              max_seq_length=128, squeeze=True, max_grad_norm=1.0, eval_batch_size=32, epoch_save_model=False):
+              max_seq_length=128, squeeze=True, max_grad_norm=1.0, eval_batch_size=32, epoch_save_model=False,
+              model_name='BERT'):
         if os.path.exists(output_dir) and os.listdir(output_dir):
             raise ValueError("Output directory (%s) already exists and is not empty." % output_dir)
         
@@ -53,9 +55,14 @@ class BERT:
         hidden_size = 768 if 'base' in pretrained_path else 1024
         device = 'cuda:3' if (torch.cuda.is_available() and not no_cuda) else 'cpu'
         logger.info(device)
-        model = XLMRForTokenClassification(pretrained_path=pretrained_path,
-                                        n_labels=num_labels, hidden_size=hidden_size,
-                                        dropout=dropout, device=device)
+        if model_name == 'Reformer':
+            model = Reformer(n_labels=num_labels, hidden_size=768,
+                             dropout=dropout, device=device, max_seq_length=max_seq_length,
+                             batch_size=train_batch_size)
+        else:
+            model = XLMRForTokenClassification(pretrained_path=pretrained_path,
+                                n_labels=num_labels, hidden_size=hidden_size,
+                                dropout=dropout, device=device)
 
         model.to(device)
         no_decay = ['bias', 'final_layer_norm.weight']
