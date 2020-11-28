@@ -5,20 +5,19 @@ import torch.nn.functional as F
 class Reformer(nn.Module):
     
     def __init__(self, n_labels, hidden_size, dropout=0.2, label_ignore_idx=0,
-                max_seq_length=128, batch_size=32, head_init_range=0.04, device='cuda'):
+                max_seq_length=128, batch_size=32, head_init_range=0.04, device='cuda',
+                vocab_size=320):
         super().__init__()
 
         self.n_labels = n_labels
         
-        self.linear_1 = nn.Linear(hidden_size, hidden_size)
-        self.classification_head = nn.Linear(hidden_size, n_labels)
+        self.linear_1 = nn.Linear(vocab_size, vocab_size)
+        self.classification_head = nn.Linear(vocab_size, n_labels)
         
         self.label_ignore_idx = label_ignore_idx
         self.tokenizer = ReformerTokenizer.from_pretrained('google/reformer-crime-and-punishment')
-        self.model = ReformerModelWithLMHead.from_pretrained('google/reformer-crime-and-punishment')
-        self.model.config.axial_pos_shape = [batch_size, int(max_seq_length/batch_size)]
-        self.model.axial_pos_shape = [batch_size, int(max_seq_length/batch_size)]
-        print(self.model.axial_pos_shape)
+        config = ReformerConfig(axial_pos_shape=[batch_size, int(max_seq_length/batch_size)], is_decoder=True, vocab_size=vocab_size)
+        self.model = ReformerModelWithLMHead(config)
         self.dropout = nn.Dropout(dropout)
 
         self.device = device
@@ -41,13 +40,6 @@ class Reformer(nn.Module):
             loss: Cross Entropy loss between labels and logits
 
         '''
-        print(inputs_ids.size())
-        print('----')
-        print(self.model.config.axial_pos_shape)
-        print(self.model.axial_pos_shape)
-        print(self.model(inputs_ids, return_dict=True).size())
-        print(self.model(inputs_ids, return_dict=True).logits.size())
-
         transformer_out  = self.model(inputs_ids, return_dict=True)[0]
         out_1 = F.relu(self.linear_1(transformer_out))
         out_1 = self.dropout(out_1)

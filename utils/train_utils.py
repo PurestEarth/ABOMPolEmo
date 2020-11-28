@@ -179,7 +179,7 @@ def classification_report(y_true, y_pred, digits=2, suffix=False):
     return report
 
 
-def evaluate_model(model, eval_dataset, label_list, batch_size, device):
+def evaluate_model(model, eval_dataset, label_list, batch_size, device, model_name):
      """
      Evaluates an NER model on the eval_dataset provided.
      Returns:
@@ -196,9 +196,9 @@ def evaluate_model(model, eval_dataset, label_list, batch_size, device):
 
      y_true = []
      y_pred = []
-
+     ignored_label = "IGNORE"
      label_map = {i: label for i, label in enumerate(label_list, 1)}
-
+     label_map[0] = ignored_label # 0 label is to be ignored
      for input_ids, label_ids, l_mask, valid_ids in eval_dataloader:
 
           input_ids = input_ids.to(device)
@@ -208,9 +208,8 @@ def evaluate_model(model, eval_dataset, label_list, batch_size, device):
           l_mask = l_mask.to(device)
 
           with torch.no_grad():
-               logits = model(input_ids, labels=None, labels_mask=None,
-                              valid_mask=valid_ids)
-
+                logits = model(input_ids, labels=None, labels_mask=None,
+                                valid_mask=valid_ids)
           logits = torch.argmax(logits, dim=2)
           logits = logits.detach().cpu().numpy()
           label_ids = label_ids.cpu().numpy()
@@ -221,8 +220,8 @@ def evaluate_model(model, eval_dataset, label_list, batch_size, device):
 
                for j, m in enumerate(cur_label):
                     if valid_ids[i][j]:  # if it's a valid label
-                         temp_1.append(label_map[m])
-                         temp_2.append(label_map[logits[i][j]])
+                        temp_1.append(label_map[m])
+                        temp_2.append(label_map[logits[i][j]])
 
                assert len(temp_1) == len(temp_2)
                y_true.append(temp_1)

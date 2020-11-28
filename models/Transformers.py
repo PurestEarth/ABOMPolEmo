@@ -130,7 +130,7 @@ class Transformers:
                     model.zero_grad()
 
             logger.info("\nTesting on validation set...")
-            f1, report = evaluate_model(model, val_data, label_list, eval_batch_size, device)
+            f1, report = evaluate_model(model, val_data, label_list, eval_batch_size, device, model_name)
             print(report)
             if f1 > best_val_f1:
                 best_val_f1 = f1
@@ -168,7 +168,7 @@ class Transformers:
         logger.info("  Num examples = %d", len(eval_examples))
         logger.info("  Batch size = %d", eval_batch_size)
         eval_data = create_dataset(eval_features)
-        f1_score, report = evaluate_model(model, eval_data, label_list, eval_batch_size, device)
+        f1_score, report = evaluate_model(model, eval_data, label_list, eval_batch_size, device, model_name)
 
         logger.info("\n%s", report)
         output_eval_file = os.path.join(output_dir, "eval_results.txt")
