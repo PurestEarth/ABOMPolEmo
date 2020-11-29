@@ -7,7 +7,8 @@ from keras.preprocessing.sequence import pad_sequences
 from keras_contrib.layers import CRF
 from keras.utils import plot_model
 from allennlp.commands.elmo import ElmoEmbedder
-from utils.data_utils import NERSequence
+from utils.data_utils import ABSASequence
+
 
 
 class BiLSTMCRF(object):
@@ -34,12 +35,11 @@ class BiLSTMCRF(object):
                  embeddings=None,
                  use_char=False,
                  use_crf=True,
-                 nn_type="GRU",
+                 nn_type="LSTM",
                  input_size=300):
         """Build a Bi-LSTM CRF model.
 
         Args:
-            word_vocab_size (int): word vocabulary size.
             char_vocab_size (int): character vocabulary size.
             num_labels (int): number of entity labels.
             word_embedding_dim (int): word embedding dimensions.
@@ -112,33 +112,8 @@ class BiLSTMCRF(object):
         plot_model(model, to_file='LSTM.png', show_shapes=True, show_layer_names=True)
         print(model.summary())
 
-        return model, loss
+        return model, loss    
 
-    def build_top_layers(self):
-        words = Input(batch_shape=self._input_size, dtype='float32', name='word_input')
-        if self._nn_type == "GRU":
-            z = Bidirectional(GRU(units=self._word_lstm_size, return_sequences=True))(words)
-        elif self._nn_type == "LSTM":
-            z = Bidirectional(LSTM(units=self._word_lstm_size, return_sequences=True))(words)
-        else:
-            raise Exception("Unknown NN type: %s (expected GRU or LSTM)" % self._nn_type)
-
-        z = Dense(self._fc_dim, activation='tanh')(z)
-
-        if self._use_crf:
-            crf = CRF(self._num_labels, sparse_target=False)
-            loss = crf.loss_function
-            pred = crf(z)
-        else:
-            loss = 'categorical_crossentropy'
-            pred = Dense(self._num_labels, activation='softmax')(z)
-
-        model = Model(inputs=words, outputs=pred)
-
-        print(model.summary())
-        self.model = model
-        return model, loss
-    
 
     def generate(self, sentence):
         return self.elmo.embed_sentence(sentence)[2]
@@ -166,7 +141,7 @@ class BiLSTMCRF(object):
 
     def train(self, model, x_train, y_train, x_valid=None, y_valid=None, epochs=1, batch_size=32, shuffle=True):
         self.model = model
-        train_seq = NERSequence(x_train, y_train, batch_size, self.transform)
+        train_seq = ABSASequence(x_train, y_train, batch_size, self.transform)
 
         self.model.fit_generator(generator=train_seq,
                                   epochs=epochs,

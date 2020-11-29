@@ -1,4 +1,4 @@
-from transformers import ReformerTokenizer, ReformerModelWithLMHead, ReformerConfig
+from transformers import ReformerTokenizer, ReformerForSequenceClassification, ReformerConfig
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -17,7 +17,7 @@ class Reformer(nn.Module):
         self.label_ignore_idx = label_ignore_idx
         self.tokenizer = ReformerTokenizer.from_pretrained('google/reformer-crime-and-punishment')
         config = ReformerConfig(axial_pos_shape=[batch_size, int(max_seq_length/batch_size)], is_decoder=True, vocab_size=vocab_size)
-        self.model = ReformerModelWithLMHead(config)
+        self.model = ReformerForSequenceClassification(config)
         self.dropout = nn.Dropout(dropout)
 
         self.device = device
@@ -44,7 +44,6 @@ class Reformer(nn.Module):
         out_1 = F.relu(self.linear_1(transformer_out))
         out_1 = self.dropout(out_1)
         logits = self.classification_head(out_1)
-
         if labels is not None:
             loss_fct = nn.CrossEntropyLoss(ignore_index=self.label_ignore_idx)
             # Only keep active parts of the loss
@@ -53,6 +52,9 @@ class Reformer(nn.Module):
 
                 active_logits = logits.view(-1, self.n_labels)[active_loss]
                 active_labels = labels.view(-1)[active_loss]
+                print('-')
+                print(active_logits.size())
+                print(active_labels.size())
                 loss = loss_fct(active_logits, active_labels)
             else:
                 loss = loss_fct(

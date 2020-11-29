@@ -1,10 +1,13 @@
 import argparse
 from utils.data_utils import load_from_folder
 from models.LSTM import BiLSTMCRF
+
 from models.Transformers import Transformers
+
 
 def main(args):
     if args.model == 'LSTM':
+
         x_train, y_train = load_from_folder(args.input)
         uniq_labels = list(set(i for j in y_train for i in j))
         label2id = dict((j,i) for i,j in enumerate(uniq_labels))
@@ -56,7 +59,7 @@ def parse_args():
     parser.add_argument('--gradient_accumulation_steps', type=int, default=1, help='gradient accumulation steps')
     parser.add_argument('--epochs', required=True, default=32, type=int, metavar='num', help='number of epochs')
     parser.add_argument('--char', default=True, help='use char embedding built from training data')
-    parser.add_argument('--gpu', nargs='+', help='which GPUs to use')
+    parser.add_argument('-g', nargs='+', help='which GPUs to use')
     parser.add_argument("--train_batch_size", default=32, type=int, help="Total batch size for training.")
     return parser.parse_args()
 

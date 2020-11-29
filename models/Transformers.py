@@ -42,7 +42,7 @@ class Transformers:
         np.random.seed(seed)
         torch.manual_seed(seed)
 
-          # add one for IGNORE label
+        # add one for IGNORE label
 
         train_examples = None
         num_train_optimization_steps = 0

@@ -39,9 +39,6 @@ def load_from_folder(path):
         tokens, labels = read_json('{}/{}'.format(path, f))
         x_train.append(tokens)
         y_train.append(labels)
-        # TODO delet
-        if len(x_train) > 100:
-            break
     return x_train, y_train
 
 
@@ -188,7 +185,7 @@ def append_pending(ignored_label, pending_token_ids, pending_input_mask, pending
                          label_mask=pending_label_mask)
 
 
-class NERSequence(Sequence):
+class ABSASequence(Sequence):
 
     def __init__(self, x, y, batch_size=1, preprocess=None):
         self.x = x
