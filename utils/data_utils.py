@@ -39,6 +39,9 @@ def load_from_folder(path):
         tokens, labels = read_json('{}/{}'.format(path, f))
         x_train.append(tokens)
         y_train.append(labels)
+        # TODO delet
+        if (len(x_train) > 100):
+            break
     return x_train, y_train
 
 
@@ -57,7 +60,48 @@ def get_examples(path, set_type='train'):
     return examples, list(set(label_list))
 
 
-def convert_examples_to_features(examples, label_list, max_seq_length, encode_method):
+def convert_examples_to_features(examples, label_list, max_seq_length, encode_method, model_name):
+    if model_name == 'LSTM':
+        return convert_examples_to_features_LSTM(examples, label_list, max_seq_length, encode_method) 
+    else:
+        return convert_examples_to_features_Transformers(examples, label_list, max_seq_length, encode_method)
+
+
+def convert_examples_to_features_LSTM(examples, label_list, max_seq_length, encode_method):
+    ignored_label = "IGNORE"
+    features = []
+    label_map = {label: i for i, label in enumerate(label_list, 1)}
+    label_map[ignored_label] = 0  # 0 label is to be ignored
+    for (ex_index, example) in enumerate(examples):
+        textlist = example.text_a.split(' ')
+        labellist = example.label
+        labels = []
+        label_ids = []
+        valid = []
+        label_mask = []
+        token_ids = encode_method(textlist)
+        if(len(token_ids) > max_seq_length):
+            token_ids = token_ids[0:max_seq_length]
+        elif len(token_ids) < max_seq_length:
+            token_ids.extend([0] * (max_seq_length-len(token_ids)))
+        valid_ids = [1]*len(token_ids)
+        for i in range(0, max_seq_length):
+            if i >= len(labellist):
+                label_ids.append(label_map[ignored_label])  
+                label_mask.append(0) 
+            else:
+                label_ids.append(label_map[labellist[i]])
+                label_mask.append(1)
+        valid_ids.extend([0] * (max_seq_length-len(token_ids)))
+
+        features.append(InputFeatures(input_ids=token_ids,
+                            input_mask=[1] * len(token_ids),
+                            label_id=label_ids,
+                            valid_ids=valid_ids,
+                            label_mask=label_mask))
+    return features
+
+def convert_examples_to_features_Transformers(examples, label_list, max_seq_length, encode_method):
     ignored_label = "IGNORE"
     label_map = {label: i for i, label in enumerate(label_list, 1)}
     label_map[ignored_label] = 0  # 0 label is to be ignored
@@ -74,19 +118,21 @@ def convert_examples_to_features(examples, label_list, max_seq_length, encode_me
         valid = []
         label_mask = []
         token_ids = []
+
         for i, word in enumerate(textlist):  
-            tokens = encode_method(word.strip())  # word token ids   
-            token_ids.extend(tokens)  # all sentence token ids
+            tokens = encode_method(word.strip())
+            token_ids.extend(tokens)
             label_1 = labellist[i]
             for m in range(len(tokens)):
-                if m == 0:  # only label the first BPE token of each work
+                if m == 0:
                     labels.append(label_1)
                     valid.append(1)
                     label_mask.append(1)
                 else:
-                    labels.append(ignored_label)  # unlabeled BPE token
+                    labels.append(ignored_label)
                     label_mask.append(0)
                     valid.append(0)
+
 
         if len(token_ids) >= max_seq_length - 1:  # trim extra tokens
             token_ids = token_ids[0:(max_seq_length-2)]
@@ -105,7 +151,6 @@ def convert_examples_to_features(examples, label_list, max_seq_length, encode_me
         labels.append(ignored_label)
         label_mask.append(0)
         valid.append(0)
-
         assert len(token_ids) == len(labels)
         assert len(valid) == len(labels)
 
@@ -135,19 +180,32 @@ def convert_examples_to_features(examples, label_list, max_seq_length, encode_me
     return features
 
 
-def create_dataset(features):
-    
-    all_input_ids = torch.tensor(
-        [f.input_ids for f in features], dtype=torch.long)
-    all_label_ids = torch.tensor(
-        [f.label_id for f in features], dtype=torch.long)
-    all_valid_ids = torch.tensor(
-        [f.valid_ids for f in features], dtype=torch.long)
-    all_lmask_ids = torch.tensor(
-        [f.label_mask for f in features], dtype=torch.long)
+def create_dataset(features, model_name):
+    print(len(features))
+    if model_name != 'LSTM':
+        all_input_ids = torch.tensor(
+            [f.input_ids for f in features], dtype=torch.long)
+        all_label_ids = torch.tensor(
+            [f.label_id for f in features], dtype=torch.long)
+        all_valid_ids = torch.tensor(
+            [f.valid_ids for f in features], dtype=torch.long)
+        all_lmask_ids = torch.tensor(
+            [f.label_mask for f in features], dtype=torch.long)
 
-    return TensorDataset(
-        all_input_ids, all_label_ids, all_lmask_ids, all_valid_ids)
+        return TensorDataset(
+            all_input_ids, all_label_ids, all_lmask_ids, all_valid_ids)
+    else:
+        all_input_ids = [torch.from_numpy(f.input_ids) for f in features]
+        all_label_ids = torch.tensor(
+            [f.label_id for f in features], dtype=torch.long)
+        all_valid_ids = torch.tensor(
+            [f.valid_ids for f in features], dtype=torch.long)
+        all_lmask_ids = torch.tensor(
+            [f.label_mask for f in features], dtype=torch.long)
+        print('----')
+        return TensorDataset(
+            all_input_ids, all_label_ids, all_lmask_ids, all_valid_ids)
+
 
 
 def save_params(model_path, dropout, num_labels, label_list):
@@ -183,24 +241,6 @@ def append_pending(ignored_label, pending_token_ids, pending_input_mask, pending
                          label_id=pending_label_ids,
                          valid_ids=pending_valid,
                          label_mask=pending_label_mask)
-
-
-class ABSASequence(Sequence):
-
-    def __init__(self, x, y, batch_size=1, preprocess=None):
-        self.x = x
-        self.y = y
-        self.batch_size = batch_size
-        self.preprocess = preprocess
-
-    def __getitem__(self, idx):
-        batch_x = self.x[idx * self.batch_size: (idx + 1) * self.batch_size]
-        batch_y = self.y[idx * self.batch_size: (idx + 1) * self.batch_size]
-
-        return self.preprocess(batch_x, batch_y)
-
-    def __len__(self):
-        return math.ceil(len(self.x) / self.batch_size)
 
 
 class InputExample(object):

@@ -52,9 +52,6 @@ class Reformer(nn.Module):
 
                 active_logits = logits.view(-1, self.n_labels)[active_loss]
                 active_labels = labels.view(-1)[active_loss]
-                print('-')
-                print(active_logits.size())
-                print(active_labels.size())
                 loss = loss_fct(active_logits, active_labels)
             else:
                 loss = loss_fct(
