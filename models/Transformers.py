@@ -60,10 +60,6 @@ class Transformers:
             model = Reformer(n_labels=num_labels, hidden_size=768,
                              dropout=dropout, device=device, max_seq_length=max_seq_length,
                              batch_size=train_batch_size)
-        elif model_name == 'LSTM':
-            model = LSTM(n_labels=num_labels, hidden_size=768,
-                             dropout=dropout, device=device,
-                             batch_size=train_batch_size, embedding_path=embedding_path)
         else:
             model = XLMRForTokenClassification(pretrained_path=pretrained_path,
                                 n_labels=num_labels, hidden_size=hidden_size,
@@ -86,23 +82,23 @@ class Transformers:
         scheduler = WarmupLinearSchedule(optimizer, warmup_steps=warmup_steps, t_total=num_train_optimization_steps)
 
         train_features = convert_examples_to_features(
-            train_examples, label_list, max_seq_length, model.encode_word, model_name)
+            train_examples, label_list, max_seq_length, model.encode_word)
 
         logger.info("***** Running training *****")
         logger.info("  Num examples = %d", len(train_examples))
         logger.info("  Batch size = %d", train_batch_size)
         logger.info("  Num steps = %d", num_train_optimization_steps)
 
-        train_data = create_dataset(train_features, model_name)
+        train_data = create_dataset(train_features)
         train_sampler = RandomSampler(train_data)
         train_dataloader = DataLoader(
             train_data, sampler=train_sampler, batch_size=train_batch_size)
         
         val_examples, _ = get_examples(valid_path, 'valid')
         val_features = convert_examples_to_features(
-            val_examples, label_list, max_seq_length, model.encode_word, model_name)
+            val_examples, label_list, max_seq_length, model.encode_word)
 
-        val_data = create_dataset(val_features, model_name)
+        val_data = create_dataset(val_features)
         
         best_val_f1 = 0.0
 
@@ -135,7 +131,7 @@ class Transformers:
                     model.zero_grad()
 
             logger.info("\nTesting on validation set...")
-            f1, report = evaluate_model(model, val_data, label_list, eval_batch_size, device, model_name)
+            f1, report = evaluate_model(model, val_data, label_list, eval_batch_size, device)
             print(report)
             if f1 > best_val_f1:
                 best_val_f1 = f1
@@ -167,13 +163,13 @@ class Transformers:
         eval_examples, _ = get_examples(path_data)
 
         eval_features = convert_examples_to_features(
-            eval_examples, label_list, max_seq_length, model.encode_word, model_name)
+            eval_examples, label_list, max_seq_length, model.encode_word)
         
         logger.info("***** Running evaluation *****")
         logger.info("  Num examples = %d", len(eval_examples))
         logger.info("  Batch size = %d", eval_batch_size)
-        eval_data = create_dataset(eval_features, model_name)
-        f1_score, report = evaluate_model(model, eval_data, label_list, eval_batch_size, device, model_name)
+        eval_data = create_dataset(eval_features)
+        f1_score, report = evaluate_model(model, eval_data, label_list, eval_batch_size, device)
 
         logger.info("\n%s", report)
         output_eval_file = os.path.join(output_dir, "eval_results.txt")

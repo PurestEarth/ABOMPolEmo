@@ -5,7 +5,7 @@ from keras.utils import Sequence
 import torch
 import math
 from torch.utils.data import TensorDataset
-
+import numpy as np
 
 def read_json(path):
     with open(path, encoding='utf-8') as f:
@@ -60,48 +60,7 @@ def get_examples(path, set_type='train'):
     return examples, list(set(label_list))
 
 
-def convert_examples_to_features(examples, label_list, max_seq_length, encode_method, model_name):
-    if model_name == 'LSTM':
-        return convert_examples_to_features_LSTM(examples, label_list, max_seq_length, encode_method) 
-    else:
-        return convert_examples_to_features_Transformers(examples, label_list, max_seq_length, encode_method)
-
-
-def convert_examples_to_features_LSTM(examples, label_list, max_seq_length, encode_method):
-    ignored_label = "IGNORE"
-    features = []
-    label_map = {label: i for i, label in enumerate(label_list, 1)}
-    label_map[ignored_label] = 0  # 0 label is to be ignored
-    for (ex_index, example) in enumerate(examples):
-        textlist = example.text_a.split(' ')
-        labellist = example.label
-        labels = []
-        label_ids = []
-        valid = []
-        label_mask = []
-        token_ids = encode_method(textlist)
-        if(len(token_ids) > max_seq_length):
-            token_ids = token_ids[0:max_seq_length]
-        elif len(token_ids) < max_seq_length:
-            token_ids.extend([0] * (max_seq_length-len(token_ids)))
-        valid_ids = [1]*len(token_ids)
-        for i in range(0, max_seq_length):
-            if i >= len(labellist):
-                label_ids.append(label_map[ignored_label])  
-                label_mask.append(0) 
-            else:
-                label_ids.append(label_map[labellist[i]])
-                label_mask.append(1)
-        valid_ids.extend([0] * (max_seq_length-len(token_ids)))
-
-        features.append(InputFeatures(input_ids=token_ids,
-                            input_mask=[1] * len(token_ids),
-                            label_id=label_ids,
-                            valid_ids=valid_ids,
-                            label_mask=label_mask))
-    return features
-
-def convert_examples_to_features_Transformers(examples, label_list, max_seq_length, encode_method):
+def convert_examples_to_features(examples, label_list, max_seq_length, encode_method):
     ignored_label = "IGNORE"
     label_map = {label: i for i, label in enumerate(label_list, 1)}
     label_map[ignored_label] = 0  # 0 label is to be ignored
@@ -180,31 +139,19 @@ def convert_examples_to_features_Transformers(examples, label_list, max_seq_leng
     return features
 
 
-def create_dataset(features, model_name):
-    print(len(features))
-    if model_name != 'LSTM':
-        all_input_ids = torch.tensor(
-            [f.input_ids for f in features], dtype=torch.long)
-        all_label_ids = torch.tensor(
-            [f.label_id for f in features], dtype=torch.long)
-        all_valid_ids = torch.tensor(
-            [f.valid_ids for f in features], dtype=torch.long)
-        all_lmask_ids = torch.tensor(
-            [f.label_mask for f in features], dtype=torch.long)
+def create_dataset(features):
+    all_input_ids = torch.tensor(
+        [f.input_ids for f in features], dtype=torch.long)
+    all_label_ids = torch.tensor(
+        [f.label_id for f in features], dtype=torch.long)
+    all_valid_ids = torch.tensor(
+        [f.valid_ids for f in features], dtype=torch.long)
+    all_lmask_ids = torch.tensor(
+        [f.label_mask for f in features], dtype=torch.long)
 
-        return TensorDataset(
-            all_input_ids, all_label_ids, all_lmask_ids, all_valid_ids)
-    else:
-        all_input_ids = [torch.from_numpy(f.input_ids) for f in features]
-        all_label_ids = torch.tensor(
-            [f.label_id for f in features], dtype=torch.long)
-        all_valid_ids = torch.tensor(
-            [f.valid_ids for f in features], dtype=torch.long)
-        all_lmask_ids = torch.tensor(
-            [f.label_mask for f in features], dtype=torch.long)
-        print('----')
-        return TensorDataset(
-            all_input_ids, all_label_ids, all_lmask_ids, all_valid_ids)
+    return TensorDataset(
+        all_input_ids, all_label_ids, all_lmask_ids, all_valid_ids)
+    
 
 
 
@@ -274,3 +221,29 @@ class InputFeatures(object):
         self.valid_ids = valid_ids
         self.label_mask = label_mask
 
+
+
+def get_batch(x_train, y_train, label_map, device, max_seq_length, embed_method, embed_length=1024, last_one=False):
+    # todo squeeze
+
+    assert len(x_train) == len(y_train)
+    train_tensor = torch.zeros([len(x_train), max_seq_length, embed_length]).to(device)
+    valid_ids = torch.zeros([len(x_train), max_seq_length], dtype=torch.long).to(device)
+    valid_labels = torch.zeros([len(x_train), max_seq_length], dtype=torch.long).to(device)
+    label_tensor = torch.zeros([len(x_train), max_seq_length], dtype=torch.long).to(device)
+    for i in range(0, len(x_train)):
+        embeds = embed_method(x_train[i])
+        for j in range (0, max_seq_length):
+            if(j < len(embeds)):
+                # add embedding
+                train_tensor[i][j] = torch.from_numpy(embeds[j])
+                label_tensor[i][j] = label_map[y_train[i][j]]
+                valid_ids[i][j] = 1
+                valid_labels[i][j] = 1
+            else:
+                #add empty
+                train_tensor[i][j] = torch.from_numpy(np.zeros(embed_length))
+                label_tensor[i][j] = 0
+                valid_ids[i][j] = 0
+                valid_labels[i][j] = 0
+    return train_tensor, label_tensor, valid_labels, valid_ids

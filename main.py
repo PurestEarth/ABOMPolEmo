@@ -1,34 +1,28 @@
 import argparse
 from utils.data_utils import load_from_folder
-from models.LSTM import BiLSTMCRF
+from models.lstm import LSTM, Trainer
 
 from models.Transformers import Transformers
 
 
 def main(args):
     if args.model == 'LSTM':
-
         x_train, y_train = load_from_folder(args.input)
         uniq_labels = list(set(i for j in y_train for i in j))
-        label2id = dict((j,i) for i,j in enumerate(uniq_labels))
-        biLSTMCRF = BiLSTMCRF(num_labels=len(uniq_labels), 
+        ignored_label = "IGNORE"
+        label_map = {label: i for i, label in enumerate(uniq_labels, 1)}
+        label_map[ignored_label] = 0
+        biLSTMCRF = LSTM(n_labels=len(uniq_labels), 
                             embedding_path=args.embedding,
-                            word_lstm_size=100, 
-                            label2id = label2id,
-                            char_lstm_size=25,
-                            fc_dim=100,
-                            dropout=0.5,
-                            use_char=False,
-                            use_crf=True,
-                            nn_type='LSTM',
-                            input_size=1024)
-        model, loss = biLSTMCRF.build()
-        model.compile(loss=loss, optimizer='adam')
-        biLSTMCRF.train(model, x_train, y_train, epochs=args.epochs)
-        if not os.path.exists(args.output):
-            os.makedirs(args.output)
-        biLSTMCRF.save(args.output)
-
+                            hidden_size=1024, 
+                            input_size=args.train_batch_size*args.max_seq_length
+                            )
+        trainer = Trainer()
+        trainer.train(biLSTMCRF, x_train, y_train, label_map=label_map, epochs=args.epochs, train_batch_size=args.train_batch_size, output_dir=args.output,
+                      gradient_accumulation_steps=args.gradient_accumulation_steps, seed=args.seed, max_seq_length=args.max_seq_length)
+        #if not os.path.exists(args.output):
+        #    os.makedirs(args.output)
+        #biLSTMCRF.save(args.output)
     else:
         transformers = Transformers()
         transformers.train(
