@@ -12,6 +12,8 @@ def main(args):
         ignored_label = "IGNORE"
         label_map = {label: i for i, label in enumerate(uniq_labels, 1)}
         label_map[ignored_label] = 0
+        print(label_map)
+        print(y_train[0])
         biLSTMCRF = LSTM(n_labels=len(uniq_labels), 
                             embedding_path=args.embedding,
                             hidden_size=1024, 

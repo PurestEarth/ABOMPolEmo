@@ -40,8 +40,8 @@ def load_from_folder(path):
         x_train.append(tokens)
         y_train.append(labels)
         # TODO delet
-        if (len(x_train) > 100):
-            break
+        #if (len(x_train) > 100):
+        #    break
     return x_train, y_train
 
 
@@ -223,13 +223,12 @@ class InputFeatures(object):
 
 
 
-def get_batch(x_train, y_train, label_map, device, max_seq_length, embed_method, embed_length=1024, last_one=False):
+def get_batch(x_train, y_train, label_map, device, max_seq_length, embed_method, embed_length=1024, last_one=False, ignored_label='IGNORE'):
     # todo squeeze
-
     assert len(x_train) == len(y_train)
     train_tensor = torch.zeros([len(x_train), max_seq_length, embed_length]).to(device)
-    valid_ids = torch.zeros([len(x_train), max_seq_length], dtype=torch.long).to(device)
-    valid_labels = torch.zeros([len(x_train), max_seq_length], dtype=torch.long).to(device)
+    valid_ids = torch.zeros([len(x_train), max_seq_length], dtype=torch.bool).to(device)
+    valid_labels = torch.zeros([len(x_train), max_seq_length], dtype=torch.bool).to(device)
     label_tensor = torch.zeros([len(x_train), max_seq_length], dtype=torch.long).to(device)
     for i in range(0, len(x_train)):
         embeds = embed_method(x_train[i])
@@ -243,7 +242,7 @@ def get_batch(x_train, y_train, label_map, device, max_seq_length, embed_method,
             else:
                 #add empty
                 train_tensor[i][j] = torch.from_numpy(np.zeros(embed_length))
-                label_tensor[i][j] = 0
+                label_tensor[i][j] = label_map[ignored_label]
                 valid_ids[i][j] = 0
                 valid_labels[i][j] = 0
     return train_tensor, label_tensor, valid_labels, valid_ids

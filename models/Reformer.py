@@ -1,4 +1,4 @@
-from transformers import ReformerTokenizer, ReformerForSequenceClassification, ReformerConfig
+from transformers import ReformerTokenizer, ReformerModel, ReformerConfig
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -8,16 +8,14 @@ class Reformer(nn.Module):
                 max_seq_length=128, batch_size=32, head_init_range=0.04, device='cuda',
                 vocab_size=320):
         super().__init__()
-
         self.n_labels = n_labels
-        
-        self.linear_1 = nn.Linear(vocab_size, vocab_size)
-        self.classification_head = nn.Linear(vocab_size, n_labels)
-        
+
+        self.linear_1 = nn.Linear(hidden_size, hidden_size)
+        self.classification_head = nn.Linear(hidden_size, n_labels)
         self.label_ignore_idx = label_ignore_idx
         self.tokenizer = ReformerTokenizer.from_pretrained('google/reformer-crime-and-punishment')
-        config = ReformerConfig(axial_pos_shape=[batch_size, int(max_seq_length/batch_size)], is_decoder=True, vocab_size=vocab_size)
-        self.model = ReformerForSequenceClassification(config)
+        config = ReformerConfig(axial_pos_shape=[batch_size, int(max_seq_length/batch_size)])
+        self.model = ReformerModel(config)
         self.dropout = nn.Dropout(dropout)
 
         self.device = device
@@ -40,7 +38,8 @@ class Reformer(nn.Module):
             loss: Cross Entropy loss between labels and logits
 
         '''
-        transformer_out  = self.model(inputs_ids, return_dict=True)[0]
+        transformer_out = self.model(inputs_ids)[0]
+
         out_1 = F.relu(self.linear_1(transformer_out))
         out_1 = self.dropout(out_1)
         logits = self.classification_head(out_1)
@@ -49,7 +48,6 @@ class Reformer(nn.Module):
             # Only keep active parts of the loss
             if labels_mask is not None:
                 active_loss = valid_mask.view(-1) == 1
-
                 active_logits = logits.view(-1, self.n_labels)[active_loss]
                 active_labels = labels.view(-1)[active_loss]
                 loss = loss_fct(active_logits, active_labels)
@@ -60,10 +58,11 @@ class Reformer(nn.Module):
         else:
             return logits
 
+
     def encode_word(self, s):
         """
         takes a string and returns a list of token ids
         """
         tensor_ids = self.tokenizer.encode(s)
         # remove <s> and </s> ids
-        return tensor_ids[1:-1]
+        return tensor_ids

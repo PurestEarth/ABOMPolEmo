@@ -3,7 +3,6 @@ from utils.data_utils import get_examples, convert_examples_to_features, create_
 from utils.train_utils import evaluate_model
 from models.xlmr_for_token_classification import XLMRForTokenClassification
 from models.reformer import Reformer
-from models.lstm import LSTM
 from pytorch_transformers import AdamW, WarmupLinearSchedule
 from torch.utils.data import DataLoader, RandomSampler
 import random
@@ -57,7 +56,7 @@ class Transformers:
         device = 'cuda:3' if (torch.cuda.is_available() and not no_cuda) else 'cpu'
         logger.info(device)
         if model_name == 'Reformer':
-            model = Reformer(n_labels=num_labels, hidden_size=768,
+            model = Reformer(n_labels=num_labels, hidden_size=512,
                              dropout=dropout, device=device, max_seq_length=max_seq_length,
                              batch_size=train_batch_size)
         else:
@@ -123,7 +122,7 @@ class Transformers:
                 tr_loss += loss.item()
                 nb_tr_examples += input_ids.size(0)
                 nb_tr_steps += 1
-                if step % 1000 == 0:
+                if step % 5 == 0:
                     logger.info('Step = %d/%d; Loss = %.4f' % (step+1, steps, tr_loss / (step+1)))
                 if (step + 1) % gradient_accumulation_steps == 0:
                     optimizer.step()
