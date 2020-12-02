@@ -8,6 +8,7 @@ from models.Transformers import Transformers
 def main(args):
     if args.model == 'LSTM':
         x_train, y_train = load_from_folder(args.input)
+        x_valid, y_valid = load_from_folder(args.valid)
         uniq_labels = list(set(i for j in y_train for i in j))
         ignored_label = "IGNORE"
         label_map = {label: i for i, label in enumerate(uniq_labels, 1)}
@@ -20,7 +21,7 @@ def main(args):
                             input_size=args.train_batch_size*args.max_seq_length
                             )
         trainer = Trainer()
-        trainer.train(biLSTMCRF, x_train, y_train, label_map=label_map, epochs=args.epochs, train_batch_size=args.train_batch_size, output_dir=args.output,
+        trainer.train(biLSTMCRF, x_train, y_train, x_valid=x_valid, y_valid=y_valid, label_map=label_map, epochs=args.epochs, train_batch_size=args.train_batch_size, output_dir=args.output,
                       gradient_accumulation_steps=args.gradient_accumulation_steps, seed=args.seed, max_seq_length=args.max_seq_length)
         #if not os.path.exists(args.output):
         #    os.makedirs(args.output)
