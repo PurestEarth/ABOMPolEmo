@@ -13,15 +13,13 @@ def main(args):
         ignored_label = "IGNORE"
         label_map = {label: i for i, label in enumerate(uniq_labels, 1)}
         label_map[ignored_label] = 0
-        print(label_map)
-        print(y_train[0])
-        biLSTMCRF = LSTM(n_labels=len(uniq_labels), 
+        LSTMCRF = LSTM(n_labels=len(uniq_labels), 
                             embedding_path=args.embedding,
                             hidden_size=1024, 
                             input_size=args.train_batch_size*args.max_seq_length
                             )
         trainer = Trainer()
-        trainer.train(biLSTMCRF, x_train, y_train, x_valid=x_valid, y_valid=y_valid, label_map=label_map, epochs=args.epochs, train_batch_size=args.train_batch_size, output_dir=args.output,
+        trainer.train(LSTMCRF, x_train, y_train, x_valid=x_valid, y_valid=y_valid, label_map=label_map, epochs=args.epochs, train_batch_size=args.train_batch_size, output_dir=args.output,
                       gradient_accumulation_steps=args.gradient_accumulation_steps, seed=args.seed, max_seq_length=args.max_seq_length)
         #if not os.path.exists(args.output):
         #    os.makedirs(args.output)
@@ -55,14 +53,13 @@ def parse_args():
     parser.add_argument('--max_seq_length', type=int, default=128, help='max sequence length')
     parser.add_argument('--gradient_accumulation_steps', type=int, default=1, help='gradient accumulation steps')
     parser.add_argument('--epochs', required=True, default=32, type=int, metavar='num', help='number of epochs')
-    parser.add_argument('--char', default=True, help='use char embedding built from training data')
     parser.add_argument('-g', nargs='+', help='which GPUs to use')
     parser.add_argument("--train_batch_size", default=32, type=int, help="Total batch size for training.")
     return parser.parse_args()
 
 if __name__ == "__main__":
     args = parse_args()
-    #try:
-    main(args)
-    #except ValueError as er:
-        #rint("[ERROR] %s" % er)
+    try:
+        main(args)
+    except ValueError as er:
+        print("[ERROR] %s" % er)

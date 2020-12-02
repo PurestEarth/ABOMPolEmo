@@ -247,3 +247,9 @@ def get_batch(x_train, y_train, label_map, device, max_seq_length, embed_method,
                     valid_ids[i][j] = 0
                     valid_labels[i][j] = 0
     return train_tensor, label_tensor, valid_labels, valid_ids
+
+
+def read_params_json(path):
+    with open(path + '/params.json') as json_file:
+        data = json.load(json_file)
+        return data

@@ -146,20 +146,31 @@ class Transformers:
                 save_params(epoch_output_dir, dropout, num_labels, label_list)
 
 
-    def load(pretrained_path, hidden_size, dropout, path_model, device, output_dir,
-             path_data, label_list, max_seq_length=128, squeeze=True, eval_batch_size=32,):
-        device = 'cuda:0' if (torch.cuda.is_available() and not no_cuda) else 'cpu'
+    def evaluate(self, pretrained_path, dropout, path_model, device, num_labels,
+             data_path, label_list, max_seq_length=128, squeeze=True, eval_batch_size=32, model_name="XLMR"):
         hidden_size = 768 if 'base' in pretrained_path else 1024
-        model = XLMRForTokenClassification(pretrained_path=pretrained_path,
-                                n_labels=len(label_list)+1, hidden_size=hidden_size,
-                                dropout_p=dropout, device=device)
+        if model_name == 'Reformer':
+            model = Reformer(n_labels=num_labels, hidden_size=512,
+                             dropout=dropout, device=device, max_seq_length=max_seq_length,
+                             batch_size=eval_batch_size)
+        else:
+            model = XLMRForTokenClassification(pretrained_path=pretrained_path,
+                                n_labels=num_labels, hidden_size=hidden_size,
+                                dropout=dropout, device=device)
+        output_dir = path_model
+        logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
+                datefmt='%m/%d/%Y %H:%M:%S',
+                level=logging.INFO,
+                filename=os.path.join(output_dir, "log.txt"))
+        logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+        logger = logging.getLogger(__name__)
         state_dict = torch.load(open(os.path.join(path_model, 'model.pt'), 'rb'))
         model.load_state_dict(state_dict)
         logger.info("Loaded saved model")
 
         model.to(device)
 
-        eval_examples, _ = get_examples(path_data)
+        eval_examples, _ = get_examples(data_path)
 
         eval_features = convert_examples_to_features(
             eval_examples, label_list, max_seq_length, model.encode_word)

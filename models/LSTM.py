@@ -111,7 +111,8 @@ class Trainer:
 
 
     def train(self, model, x_train, y_train, label_map, epochs, train_batch_size, seed, x_valid, y_valid, gradient_accumulation_steps, output_dir, max_seq_length=128,
-              weight_decay=0.01, warmup_proportion=0.1, learning_rate=5e-5, adam_epsilon=1e-8, no_cuda=False, max_grad_norm=1.0, eval_batch_size=32, epoch_save_model=False):
+              weight_decay=0.01, warmup_proportion=0.1, learning_rate=0.01, adam_epsilon=1e-8, no_cuda=False, max_grad_norm=1.0, eval_batch_size=32,
+              epoch_save_model=False, dropout=0.2):
         logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
         logger = logging.getLogger(__name__)
 
@@ -129,6 +130,12 @@ class Trainer:
         warmup_steps = int(warmup_proportion * num_train_optimization_steps)
         optimizer = AdamW(optimizer_grouped_parameters, lr=learning_rate, eps=adam_epsilon)
         scheduler = WarmupLinearSchedule(optimizer, warmup_steps=warmup_steps, t_total=num_train_optimization_steps)
+
+        if os.path.exists(output_dir) and os.listdir(output_dir):
+            raise ValueError("Output directory (%s) already exists and is not empty." % output_dir)
+        
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
 
         device = 'cuda:9' if (torch.cuda.is_available() and not no_cuda) else 'cpu'
         logger.info(device)
@@ -169,10 +176,10 @@ class Trainer:
                 logger.info("\nFound better f1=%.4f on validation set. Saving model\n" % f1)
                 logger.info("%s\n" % report)
                 torch.save(model.state_dict(), open(os.path.join(output_dir, 'model.pt'), 'wb'))
-                save_params(output_dir, dropout, num_labels, label_map.keys())
+                save_params(output_dir, dropout, len(label_map.keys()), list(label_map.keys()))
 
             if epoch_save_model:
                 epoch_output_dir = os.path.join(output_dir, "e%03d" % epoch_no)
                 os.makedirs(epoch_output_dir)
                 torch.save(model.state_dict(), open(os.path.join(epoch_output_dir, 'model.pt'), 'wb'))
-                save_params(epoch_output_dir, dropout, num_labels, label_map.keys())
+                save_params(epoch_output_dir, dropout, len(label_map.keys()), list(label_map.keys()))
