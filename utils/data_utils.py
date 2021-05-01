@@ -1,11 +1,53 @@
 import json
 import os
 from utils.annotation import Annotation
-from keras.utils import Sequence
 import torch
 import math
 from torch.utils.data import TensorDataset
 import numpy as np
+
+
+def get_examples_from_xml(path):
+    g_i = 0
+    examples = []
+    labels = []
+    x_train, y_train = load_from_xml_folder(path)
+    for set_x, set_y in zip(x_train, y_train):
+        for x, y in zip(set_x, set_y): 
+            guid = "%s-%s" % ('train', g_i)
+            g_i += 1 
+            examples.append(InputExample(
+            guid=guid, text_a=' '.join(x), text_b=None, label=y))
+            for label in list(set(y)):
+                if label not in labels:
+                    labels.append(label)
+    return examples, labels
+
+
+def read_label_file(path):
+    with open(path, encoding='utf-8') as f:
+        data = json.load(f)
+        div_2 = None
+        if 'div_2' in data:
+            div_2 = data['div_2']
+        return data['label_list'], data['div'], div_2
+
+    
+def get_examples_from_json(data_dir):
+    examples = []
+    labels = []
+    with open(data_dir, encoding='utf-8') as dataset:
+        ner_data = json.load(dataset)
+        for i, ner_line in enumerate(ner_data):
+            if len(ner_line['labels']) > 0:
+                guid = "%s-%s" % ('train', i)
+                examples.append(InputExample(
+                guid=guid, text_a=' '.join(ner_line['tokens']), text_b=None, label=ner_line['labels']))
+                for label in list(set(ner_line['labels'])):
+                    if label not in labels:
+                        labels.append(label)
+    return examples, labels
+
 
 def read_json(path):
     with open(path, encoding='utf-8') as f:
@@ -39,11 +81,24 @@ def load_from_folder(path):
         tokens, labels = read_json('{}/{}'.format(path, f))
         x_train.append(tokens)
         y_train.append(labels)
-        # TODO delet
-        #if (len(x_train) > 100):
-        #    break
     return x_train, y_train
 
+
+def get_examples_from_motherfile(data_dir, ds='train'):
+    examples = []
+    labels = []
+    with open(data_dir, encoding='utf-8') as dataset:
+        ner_data = json.load(dataset)
+        for i, filename in enumerate(ner_data[ds]):
+            curr_file = ner_data[ds][filename]
+            if len(curr_file['labels']) > 0:
+                guid = "%s-%s" % ('train', i)
+                examples.append(InputExample(
+                guid=guid, text_a=' '.join(curr_file['tokens']), text_b=None, label=curr_file['labels']))
+                for label in list(set(curr_file['labels'])):
+                    if label not in labels:
+                        labels.append(label)
+    return examples, labels
 
 def get_examples(path, set_type='train'):
     examples = []

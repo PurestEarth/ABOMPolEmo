@@ -23,11 +23,11 @@ def get_entities(seq, suffix=False):
     """
     # for nested list
     if any(isinstance(s, list) for s in seq):
-        seq = [item for sublist in seq for item in sublist + ['O']]
+        seq = [item for sublist in seq for item in sublist]
 
     existing_tags = []
     chunks = []
-    for i, chunk in enumerate(seq + ['O']):
+    for i, chunk in enumerate(seq):
         for et in existing_tags:
             et['continued'] = False
         active_types = map(lambda x: x['type'] ,existing_tags)
@@ -38,13 +38,16 @@ def get_entities(seq, suffix=False):
         else:
             i_chunk.append(chunk)  
         for subchunk in i_chunk:
-            tag, type_ = get_tag_type(suffix, subchunk)
-            if start_of_chunk(tag,type_) and (tag == 'B' or type_ not in active_types):
-                existing_tags.append( {'begin': i, 'continued': True, 'type': type_} )
-            if tag == 'I':
-                for et in existing_tags:
-                    if et['type'] == type_:
-                        et['continued'] = True
+            if 'B-' in subchunk or 'I-' in subchunk:
+                tag, type_ = get_tag_type(suffix, subchunk)
+                if start_of_chunk(tag,type_) and (tag == 'B' or type_ not in active_types):
+                    existing_tags.append( {'begin': i, 'continued': True, 'type': type_} )
+                if tag == 'I':
+                    for et in existing_tags:
+                        if et['type'] == type_:
+                            et['continued'] = True
+            elif subchunk != 'O':
+                chunks.append((subchunk, i, i))
         notFinished = []
         for et in existing_tags:
             if et['continued'] :
@@ -108,29 +111,29 @@ def classification_report(y_true, y_pred, digits=2, suffix=False):
 
     Examples:
         >>> from seqeval.metrics import classification_report
-        >>> y_true = [['O', 'O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]
-        >>> y_pred = [['O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]
+        >>> y_true = [['O', 'O', 'O', 'a_zero', 'a_minus_m', 'O', 'O'], ['O', 'O', 'O']]
+        >>> y_pred = [['O', 'O', 'a_zero', 'a_plus_s', 'O', 'O', 'O'], ['O', 'O', 'O']]
         >>> print(classification_report(y_true, y_pred))
                      precision    recall  f1-score   support
         <BLANKLINE>
-               MISC       0.00      0.00      0.00         1
-                PER       1.00      1.00      1.00         1
+          a_minus_m       0.00      0.00      0.00         1
+          a_zero       1.00      1.00      1.00         1
         <BLANKLINE>
           micro avg       0.50      0.50      0.50         2
           macro avg       0.50      0.50      0.50         2
         <BLANKLINE>
     """
-    true_entities = set(get_entities(y_true, suffix))
-    pred_entities = set(get_entities(y_pred, suffix))
-
+    true_entities = set(get_entities(y_true))
+    pred_entities = set(get_entities(y_pred))
+    entity_scores = []
     name_width = 0
     d1 = defaultdict(set)
     d2 = defaultdict(set)
     for e in true_entities:
-        d1[e[0]].add((e[1], e[2]))
+        d1[e[0]].add((e[1]))
         name_width = max(name_width, len(e[0]))
     for e in pred_entities:
-        d2[e[0]].add((e[1], e[2]))
+        d2[e[0]].add((e[1]))
 
     last_line_heading = 'macro avg'
     width = max(name_width, len(last_line_heading), digits)
@@ -159,7 +162,7 @@ def classification_report(y_true, y_pred, digits=2, suffix=False):
         rs.append(r)
         f1s.append(f1)
         s.append(nb_true)
-
+        entity_scores.append({'name': type_name,'precision': p, 'recall': r, 'f1': f1, 'support': nb_true})
     report += u'\n'
 
     # compute averages
@@ -175,8 +178,7 @@ def classification_report(y_true, y_pred, digits=2, suffix=False):
                              np.average(f1s, weights=s),
                              np.sum(s),
                              width=width, digits=digits)
-
-    return report
+    return report, entity_scores
 
 
 def evaluate_model(model, eval_dataset, label_list, batch_size, device):
@@ -187,49 +189,49 @@ def evaluate_model(model, eval_dataset, label_list, batch_size, device):
           Report: detailed classification report 
      """
 
-     # Run prediction for full data
      eval_sampler = SequentialSampler(eval_dataset)
      eval_dataloader = DataLoader(
           eval_dataset, sampler=eval_sampler, batch_size=batch_size)
 
      model.eval() # turn of dropout
-
      y_true = []
      y_pred = []
      ignored_label = "IGNORE"
      label_map = {i: label for i, label in enumerate(label_list, 1)}
      label_map[0] = ignored_label # 0 label is to be ignored
+     label_dict = {}
      for input_ids, label_ids, l_mask, valid_ids in eval_dataloader:
+        input_ids = input_ids.to(device)
+        label_ids = label_ids.to(device)
 
-          input_ids = input_ids.to(device)
-          label_ids = label_ids.to(device)
+        valid_ids = valid_ids.to(device)
+        l_mask = l_mask.to(device)
 
-          valid_ids = valid_ids.to(device)
-          l_mask = l_mask.to(device)
+        with torch.no_grad():
+            logits = model(input_ids, labels=None, labels_mask=None,
+                            valid_mask=valid_ids)
+        logits = torch.argmax(logits, dim=2)
+        logits = logits.detach().cpu().numpy()
+        label_ids = label_ids.cpu().numpy()
 
-          with torch.no_grad():
-                logits = model(input_ids, labels=None, labels_mask=None,
-                                valid_mask=valid_ids)
-          logits = torch.argmax(logits, dim=2)
-          logits = logits.detach().cpu().numpy()
-          label_ids = label_ids.cpu().numpy()
+        for i, cur_label in enumerate(label_ids):
+            temp_1 = []
+            temp_2 = []
 
-          for i, cur_label in enumerate(label_ids):
-               temp_1 = []
-               temp_2 = []
-
-               for j, m in enumerate(cur_label):
-                    if valid_ids[i][j]:  # if it's a valid label
+            for j, m in enumerate(cur_label):
+                if valid_ids[i][j]:  # if it's a valid label
                         temp_1.append(label_map[m])
                         temp_2.append(label_map[logits[i][j]])
-               assert len(temp_1) == len(temp_2)
-               y_true.append(temp_1)
-               y_pred.append(temp_2)
-               
 
-     report = classification_report(y_true, y_pred, digits=4)
+            assert len(temp_1) == len(temp_2)
+            y_true.append(temp_1)
+            y_pred.append(temp_2)
+
+        del input_ids, label_ids, valid_ids, l_mask
+        torch.cuda.empty_cache()
+     report, entity_scores  = classification_report(y_true, y_pred, digits=4)
      f1 = f1_score(y_true, y_pred, average='Macro')
-     return f1, report
+     return f1, report, entity_scores
 
 
 def precision_score(y_true, y_pred, average='micro', suffix=False):
@@ -250,13 +252,13 @@ def precision_score(y_true, y_pred, average='micro', suffix=False):
 
     Example:
         >>> from seqeval.metrics import precision_score
-        >>> y_true = [['O', 'O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]
-        >>> y_pred = [['O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]
+        >>> y_true = [['O', 'O', 'O', 'a_minus_m', 'a_zero', 'O', 'O'], ['O', 'O', 'O']]
+        >>> y_pred = [['O', 'O', 'a_minus_m', 'a_zero', 'O', 'O', 'O'], ['O', 'O', 'O']]
         >>> precision_score(y_true, y_pred)
         0.50
     """
-    true_entities = set(get_entities(y_true, suffix))
-    pred_entities = set(get_entities(y_pred, suffix))
+    true_entities = set(get_entities(y_true))
+    pred_entities = set(get_entities(y_pred))
 
     nb_correct = len(true_entities & pred_entities)
     nb_pred = len(pred_entities)
@@ -284,13 +286,13 @@ def recall_score(y_true, y_pred, average='micro', suffix=False):
 
     Example:
         >>> from seqeval.metrics import recall_score
-        >>> y_true = [['O', 'O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]
-        >>> y_pred = [['O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]
+        >>> y_true = [['O', 'O', 'O', 'a_zero', 'a_minus_m', 'O', 'O'], ['O', 'O', 'O']]
+        >>> y_pred = [['O', 'O', 'a_zero', 'a_plus_s', 'O', 'O', 'O'], ['O', 'O', 'O']]
         >>> recall_score(y_true, y_pred)
         0.50
     """
-    true_entities = set(get_entities(y_true, suffix))
-    pred_entities = set(get_entities(y_pred, suffix))
+    true_entities = set(get_entities(y_true))
+    pred_entities = set(get_entities(y_pred))
 
     nb_correct = len(true_entities & pred_entities)
     nb_true = len(true_entities)
@@ -319,13 +321,13 @@ def f1_score(y_true, y_pred, average='micro', suffix=False):
 
     Example:
         >>> from seqeval.metrics import f1_score
-        >>> y_true = [['O', 'O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]
-        >>> y_pred = [['O', 'O', 'B-MISC', 'I-MISC', 'I-MISC', 'I-MISC', 'O'], ['B-PER', 'I-PER', 'O']]
+        >>> y_true = [['O', 'O', 'O', 'a_zero', 'a_minus_m', 'O', 'O'], ['O', 'O', 'O']]
+        >>> y_pred = [['O', 'O', 'a_zero', 'a_plus_s', 'O', 'O', 'O'], ['O', 'O', 'O']]
         >>> f1_score(y_true, y_pred)
         0.50
     """
-    true_entities = set(get_entities(y_true, suffix))
-    pred_entities = set(get_entities(y_pred, suffix))
+    true_entities = set(get_entities(y_true))
+    pred_entities = set(get_entities(y_pred))
 
     nb_correct = len(true_entities & pred_entities)
     nb_pred = len(pred_entities)
@@ -336,3 +338,59 @@ def f1_score(y_true, y_pred, average='micro', suffix=False):
     score = 2 * p * r / (p + r) if p + r > 0 else 0
 
     return score
+
+
+def process(model, sentences, label_list, max_seq_length, device, show_progress=False):
+        """
+        @param sentences -- array of array of words, [['Jan', 'z', 'Warszawy'], ['IBM', 'i', 'Apple']]
+        @param max_seq_length -- the maximum total input sequence length after WordPiece tokenization
+        @param squeeze -- boolean enabling squeezing multiple sentences into one Input Feature
+        """
+        examples = []
+        for idx, tokens in enumerate(sentences):
+            guid = str(idx)
+            text_a = ' '.join(tokens)
+            text_b = None
+            label = ["O"] * len(tokens)
+            examples.append(InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+
+        eval_features = convert_examples_to_features(examples, label_list, max_seq_length,
+                                                    model.encode_word)
+        eval_dataset = create_dataset(eval_features)
+        eval_dataloader = DataLoader(eval_dataset, batch_size=1)
+
+        y_pred = []
+        sum_pred = []
+        label_map = {i: label for i, label in enumerate(label_list, 1)}
+
+        if show_progress:
+            outer = tqdm.tqdm(total=len(eval_dataloader), desc='Processing', position=0)
+        for input_ids, label_ids, l_mask, valid_ids in eval_dataloader:
+            if show_progress:
+                outer.update(1)
+            input_ids = input_ids.to(device)
+            label_ids = label_ids.to(device)
+            valid_ids = valid_ids.to(device)
+
+            with torch.no_grad():
+                logits = model(input_ids, labels=None, labels_mask=None, valid_mask=valid_ids)
+
+            logits = torch.argmax(logits, dim=2)
+            logits = logits.detach().cpu().numpy()
+            label_ids = label_ids.cpu().numpy()
+            for i, cur_label in enumerate(label_ids):
+                temp_1 = []
+                temp_2 = []
+
+                for j, m in enumerate(cur_label):
+                    if valid_ids[i][j]:
+                        temp_1.append(label_map[m])
+                        temp_2.append(label_map[logits[i][j]])
+
+                assert len(temp_1) == len(temp_2)
+                y_pred.append(temp_2)
+        pointer = 0
+        for sentence in sentences:
+            y_pred.append(sum_pred[pointer: (pointer+len(sentence))])
+            pointer += len(sentence)
+        return y_pred

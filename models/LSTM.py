@@ -33,7 +33,7 @@ class LSTM(nn.Module):
 
         options_file = embedding_path + "/options.json"
         weight_file = embedding_path + "/weights.hdf5"
-        self.elmo = ElmoEmbedder(options_file, weight_file, 1)
+        self.elmo = ElmoEmbedder(options_file, weight_file, 0)
 
 
     def init_hidden(self):
@@ -169,7 +169,6 @@ class Trainer:
                     model.zero_grad()
             logger.info("\nTesting on validation set...")
             f1, report = self.evaluate_model(model, x_valid, y_valid, label_map, eval_batch_size, device, max_seq_length)
-            print(" I AM SUPREME ")
             print(report)
             if f1 > best_val_f1:
                 best_val_f1 = f1

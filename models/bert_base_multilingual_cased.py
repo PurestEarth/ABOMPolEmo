@@ -1,11 +1,11 @@
-from fairseq.models.roberta import XLMRModel
+from transformers import BertTokenizer, BertModel
 import torch.nn as nn
 import torch.nn.functional as F
+import torch
 
+class BertBaseMultilingualCased(nn.Module):
 
-class XLMRForTokenClassification(nn.Module):
-
-    def __init__(self, pretrained_path, n_labels, hidden_size, dropout=0.2, label_ignore_idx=0,
+    def __init__(self, pretrained_path, n_labels, hidden_size=768, dropout_p=0.2, label_ignore_idx=0,
                 head_init_range=0.04, device='cuda'):
         super().__init__()
 
@@ -15,10 +15,10 @@ class XLMRForTokenClassification(nn.Module):
         self.classification_head = nn.Linear(hidden_size, n_labels)
         
         self.label_ignore_idx = label_ignore_idx
+        self.tokenizer = BertTokenizer.from_pretrained(pretrained_path)
 
-        self.xlmr = XLMRModel.from_pretrained(pretrained_path)
-        self.model = self.xlmr.model
-        self.dropout = nn.Dropout(dropout)
+        self.model = BertModel.from_pretrained(pretrained_path)
+        self.dropout = nn.Dropout(dropout_p)
         
         self.device = device
 
@@ -40,16 +40,19 @@ class XLMRForTokenClassification(nn.Module):
             loss: Cross Entropy loss between labels and logits
 
         '''
-        transformer_out, _ = self.model(inputs_ids)
+        self.model.train()
 
+        transformer_out  = self.model(inputs_ids, return_dict=True)[0]
         out_1 = F.relu(self.linear_1(transformer_out))
         out_1 = self.dropout(out_1)
         logits = self.classification_head(out_1)
+
         if labels is not None:
             loss_fct = nn.CrossEntropyLoss(ignore_index=self.label_ignore_idx)
             # Only keep active parts of the loss
             if labels_mask is not None:
                 active_loss = valid_mask.view(-1) == 1
+
                 active_logits = logits.view(-1, self.n_labels)[active_loss]
                 active_labels = labels.view(-1)[active_loss]
                 loss = loss_fct(active_logits, active_labels)
@@ -60,10 +63,11 @@ class XLMRForTokenClassification(nn.Module):
         else:
             return logits
 
+
     def encode_word(self, s):
         """
         takes a string and returns a list of token ids
         """
-        tensor_ids = self.xlmr.encode(s)
+        tensor_ids = self.tokenizer.encode(s)
         # remove <s> and </s> ids
-        return tensor_ids.cpu().numpy().tolist()[1:-1]
+        return tensor_ids[1:-1]
