@@ -4,6 +4,7 @@ from .train_utils import evaluate_model
 from models.xlmr_for_token_classification import XLMRForTokenClassification
 from models.herbert_for_token_calssification import AutoTokenizerForTokenClassification
 from models.bert_base_multilingual_cased import BertBaseMultilingualCased
+from models.polish_roberta import PolishRoberta
 from models.reformer import Reformer
 from pytorch_transformers import AdamW, WarmupLinearSchedule
 from torch.utils.data import DataLoader, RandomSampler
@@ -110,10 +111,14 @@ class TrainWrapper:
             model = BertBaseMultilingualCased(
                 pretrained_path=pretrained_path, n_labels=num_labels, hidden_size=hidden_size, dropout_p=dropout,
                 device=device)
-        elif model_name == 'Reformer':
+        elif model_name == 'REFORMER':
             model = Reformer(n_labels=num_labels, hidden_size=512,
                              dropout=dropout, device=device, max_seq_length=max_seq_length,
                              batch_size=train_batch_size)
+        elif model_name == 'POLISH_ROBERTA':
+            model = PolishRoberta(
+                pretrained_path=pretrained_path, n_labels=num_labels, hidden_size=hidden_size, dropout_p=dropout,
+                device=device)
         else:
             model = XLMRForTokenClassification(pretrained_path=pretrained_path,
                                 n_labels=num_labels, hidden_size=hidden_size,
