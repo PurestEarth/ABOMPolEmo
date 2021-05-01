@@ -14,7 +14,7 @@ import sys
 class LSTM(nn.Module):
 
     def __init__(self, n_labels, hidden_size, embedding_path, dropout=0.2, label_ignore_idx=0,
-                batch_size=32, head_init_range=0.04, device='cuda',
+                batch_size=32, head_init_range=0.04, device='cuda:1',
                 vocab_size=320, input_size=300, num_layers=2, embed_size=1024):
         super().__init__()
         self.input_size = input_size
@@ -137,7 +137,7 @@ class Trainer:
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
-        device = 'cuda:9' if (torch.cuda.is_available() and not no_cuda) else 'cpu'
+        device = 'cuda:1' if (torch.cuda.is_available() and not no_cuda) else 'cpu'
         logger.info(device)
         model.to(device)
         best_val_f1 = 0.0
@@ -173,7 +173,7 @@ class Trainer:
             if f1 > best_val_f1:
                 best_val_f1 = f1
                 logger.info("\nFound better f1=%.4f on validation set. Saving model\n" % f1)
-                logger.info("%s\n" % report)
+                print(report)
                 torch.save(model.state_dict(), open(os.path.join(output_dir, 'model.pt'), 'wb'))
                 save_params(output_dir, dropout, len(label_map.keys()), list(label_map.keys()))
 

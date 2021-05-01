@@ -84,6 +84,20 @@ def load_from_folder(path):
     return x_train, y_train
 
 
+def get_those_silly_elmo_sets_from_motherfile(data_dir, ds='train'):
+    x_train = []
+    y_train = []
+    with open(data_dir, encoding='utf-8') as dataset:
+        ner_data = json.load(dataset)
+        for i, filename in enumerate(ner_data[ds]):
+            curr_file = ner_data[ds][filename]
+            if len(curr_file['labels']) > 0:
+                guid = "%s-%s" % ('train', i)
+                x_train.append(curr_file['tokens'])
+                y_train.append(curr_file['labels'])
+    return x_train, y_train
+
+
 def get_examples_from_motherfile(data_dir, ds='train'):
     examples = []
     labels = []
@@ -281,6 +295,7 @@ class InputFeatures(object):
 def get_batch(x_train, y_train, label_map, device, max_seq_length, embed_method, embed_length=1024, ignored_label='IGNORE', batch_size=32):
     # todo squeeze
     assert len(x_train) == len(y_train)
+
     train_tensor = torch.zeros([batch_size, max_seq_length, embed_length]).to(device)
     valid_ids = torch.zeros([batch_size, max_seq_length], dtype=torch.bool).to(device)
     valid_labels = torch.zeros([batch_size, max_seq_length], dtype=torch.bool).to(device)

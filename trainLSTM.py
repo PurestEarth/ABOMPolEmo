@@ -1,27 +1,32 @@
 import argparse
+from utils.data_utils import load_from_folder, get_those_silly_elmo_sets_from_motherfile
+from models.lstm import LSTM, Trainer
 from utils.TrainWrapper import TrainWrapper
 
 
 def main(args):
 
-    trainer = TrainWrapper()
-    trainer.train(
-        output_dir=args.output_dir,
-        train_batch_size=args.train_batch_size, 
-        gradient_accumulation_steps=args.gradient_accumulation_steps, 
-        seed=args.seed,
-        max_seq_length=args.max_seq_length,
-        epochs=args.epochs,
-        warmup_proportion=args.warmup_proportion, 
-        data_path=args.data_dir, 
-        learning_rate=args.learning_rate,
-        pretrained_path=args.pretrained_path, 
-        split_train_data=args.split_train_data,
-        motherfile=args.motherfile,
-        device=args.g,
-        wandb=args.wandb,
-        model_name=args.model_name
-    )
+    if args.motherfile:
+        x_train, y_train = get_those_silly_elmo_sets_from_motherfile(args.data_dir, 'train')
+        x_valid, y_valid = get_those_silly_elmo_sets_from_motherfile(args.data_dir, 'test')
+    else:
+        x_train, y_train = load_from_folder(args.data_dir)
+        x_valid, y_valid = load_from_folder(args.valid)
+    uniq_labels = list(set(i for j in y_train for i in j))
+    ignored_label = "IGNORE"
+    label_map = {label: i for i, label in enumerate(uniq_labels, 1)}
+    label_map[ignored_label] = 0
+    LSTMCRF = LSTM(n_labels=len(uniq_labels), 
+                        embedding_path=args.embedding,
+                        hidden_size=1024, 
+                        input_size=args.train_batch_size*args.max_seq_length
+                        )
+    trainer = Trainer()
+    trainer.train(LSTMCRF, x_train, y_train, x_valid=x_valid, y_valid=y_valid, label_map=label_map, epochs=args.epochs, train_batch_size=args.train_batch_size, output_dir=args.output_dir,
+                    gradient_accumulation_steps=args.gradient_accumulation_steps, seed=args.seed, max_seq_length=args.max_seq_length)
+    #if not os.path.exists(args.output_dir):
+    #    os.makedirs(args.output_dir)
+    #biLSTMCRF.save(args.output_dir)
 
 
 def parse_args():
@@ -59,6 +64,7 @@ def parse_args():
     parser.add_argument("--split_train_data", default=False, help="Split train data into multiple batches.")
     parser.add_argument('--motherfile', action='store_true', default=False, help = "whether used dataset is motherfile")  
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     args = parse_args()
