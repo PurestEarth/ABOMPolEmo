@@ -43,7 +43,7 @@ class TrainWrapper:
         if save and os.path.exists(output_dir) and os.listdir(output_dir):
             raise ValueError("Output directory (%s) already exists and is not empty." % output_dir)
         
-        if not os.path.exists(output_dir):
+        if save and not os.path.exists(output_dir):
             os.makedirs(output_dir)
         if not logger:
             logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
@@ -102,7 +102,6 @@ class TrainWrapper:
         hidden_size = 300 if pretrained_path == None else 768 if 'base' in pretrained_path else 1024
         device = 'cuda:1' if (torch.cuda.is_available() and not no_cuda) else 'cpu'
         logger.info(device)
-
         if model_name == 'HERBERT':
             model = AutoTokenizerForTokenClassification(
                 pretrained_path=pretrained_path, n_labels=num_labels, hidden_size=hidden_size, dropout_p=dropout,
@@ -195,7 +194,7 @@ class TrainWrapper:
                     model.zero_grad()
                 del batch
             logger.info("\nTesting on validation set...")
-            f1, report, entity_scores = evaluate_model(model, val_data, label_list, eval_batch_size, device)
+            f1, report, entity_scores, precision = evaluate_model(model, val_data, label_list, eval_batch_size, device)
             epoch_stats["validation_F1"] = f1
             print(report)
             if f1 > best_val_f1:
@@ -206,7 +205,7 @@ class TrainWrapper:
                     torch.save(model.state_dict(), open(os.path.join(output_dir, 'model.pt'), 'wb'))
                     save_params(output_dir, dropout, num_labels, label_list)
 
-            if epoch_save_model:
+            if save and epoch_save_model:
                 epoch_output_dir = os.path.join(output_dir, "e%03d" % epoch_no)
                 os.makedirs(epoch_output_dir)
                 if save:
@@ -217,7 +216,7 @@ class TrainWrapper:
         model.cpu()
         del model, logger
         torch.cuda.empty_cache()
-        return best_val_f1, entity_scores
+        return best_val_f1, entity_scores, precision
 
 
     def evaluate(self, pretrained_path, dropout, path_model, device, num_labels, 

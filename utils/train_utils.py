@@ -1,9 +1,45 @@
-from seqeval.metrics import f1_score
+
 from torch.utils.data import SequentialSampler, DataLoader
 import torch
 from collections import defaultdict
 import numpy as np
 
+def add_xlmr_args(parser):
+    """
+    Adds training and validation arguments to the passed parser
+    """
+    parser.add_argument('--data_dir', required=True, metavar='PATH', help='path to input')
+    parser.add_argument('--output_dir', required=True, metavar='PATH', help='directory where model shall be saved')
+    parser.add_argument('--valid', metavar='PATH', help='directory to validation data')
+    parser.add_argument('--model_name', required=True, metavar='PATH', help='name of the model to train - LSTM | POLISHROBERTA | Reformer | HERBERT | BERT_MULTILINGUAL | XLMR')
+    parser.add_argument('--embedding', metavar='PATH', help='path to embeddings')
+    parser.add_argument('--pretrained_path', metavar='PATH', help='path to pretrained model')
+    parser.add_argument('--seed', type=int, default=44, help='seed')
+    parser.add_argument('--wandb', type=str,
+                            help="Wandb project id. If present the training data will be logged using wandb api.")  
+    parser.add_argument('--max_seq_length', type=int, default=128, help='max sequence length')
+    parser.add_argument('--gradient_accumulation_steps', type=int, default=1, help='gradient accumulation steps')
+    parser.add_argument('--epochs', required=True, default=32, type=int, metavar='num', help='number of epochs')
+    parser.add_argument('-g', nargs='+', help='which GPUs to use', default=0)
+    parser.add_argument("--train_batch_size", default=32, type=int, help="Total batch size for training.")
+    parser.add_argument("--warmup_proportion",default=0.1,type=float,
+                        help="Proportion of training to perform linear learning rate warmup for. " "E.g., 0.1 = 10%% of training.")
+    parser.add_argument("--weight_decay", default=0.01, type=float,
+                        help="Weight deay if we apply some.")
+    parser.add_argument("--adam_epsilon", default=1e-8, type=float,
+                        help="Epsilon for Adam optimizer.")
+    parser.add_argument("--max_grad_norm", default=1.0, type=float,
+                        help="Max gradient norm.")
+    parser.add_argument("--no_cuda",
+                        action='store_true',
+                        help="Whether not to use CUDA when available")
+    parser.add_argument("--learning_rate",
+                        default=5e-5,
+                        type=float,
+                        help="The initial learning rate for Adam.")
+    parser.add_argument("--split_train_data", default=False, help="Split train data into multiple batches.")
+    parser.add_argument('--motherfile', action='store_true', default=False, help = "whether used dataset is motherfile")  
+    return parser
 
 def get_entities(seq, suffix=False):
     """Gets entities from sequence.
@@ -169,7 +205,7 @@ def classification_report(y_true, y_pred, digits=2, suffix=False):
     report += row_fmt.format('micro avg',
                              precision_score(y_true, y_pred, suffix=suffix),
                              recall_score(y_true, y_pred, suffix=suffix),
-                             f1_score(y_true, y_pred, suffix=suffix),
+                             f1_score(y_true, y_pred, suffix=suffix)[0],
                              np.sum(s),
                              width=width, digits=digits)
     report += row_fmt.format(last_line_heading,
@@ -230,8 +266,8 @@ def evaluate_model(model, eval_dataset, label_list, batch_size, device):
         del input_ids, label_ids, valid_ids, l_mask
         torch.cuda.empty_cache()
      report, entity_scores  = classification_report(y_true, y_pred, digits=4)
-     f1 = f1_score(y_true, y_pred, average='Macro')
-     return f1, report, entity_scores
+     f1, precision = f1_score(y_true, y_pred, average='Macro') 
+     return f1, report, entity_scores, precision
 
 
 def precision_score(y_true, y_pred, average='micro', suffix=False):
@@ -318,6 +354,7 @@ def f1_score(y_true, y_pred, average='micro', suffix=False):
 
     Returns:
         score : float.
+        precision: float.
 
     Example:
         >>> from seqeval.metrics import f1_score
@@ -337,7 +374,7 @@ def f1_score(y_true, y_pred, average='micro', suffix=False):
     r = nb_correct / nb_true if nb_true > 0 else 0
     score = 2 * p * r / (p + r) if p + r > 0 else 0
 
-    return score
+    return score, p
 
 
 def process(model, sentences, label_list, max_seq_length, device, show_progress=False):
