@@ -106,13 +106,13 @@ class Trainer:
                 y_pred.append(temp_2)
                
         report = classification_report(y_true, y_pred, digits=4)
-        f1 = f1_score(y_true, y_pred, average='Macro')
-        return f1, report
+        f1, precision = f1_score(y_true, y_pred, average='Macro')
+        return f1, report, precision
 
 
     def train(self, model, x_train, y_train, label_map, epochs, train_batch_size, seed, x_valid, y_valid, gradient_accumulation_steps, output_dir, max_seq_length=128,
               weight_decay=0.01, warmup_proportion=0.1, learning_rate=0.01, adam_epsilon=1e-8, no_cuda=False, max_grad_norm=1.0, eval_batch_size=32,
-              epoch_save_model=False, dropout=0.2):
+              epoch_save_model=False, dropout=0.2, save=True):
         logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
         logger = logging.getLogger(__name__)
 
@@ -131,16 +131,17 @@ class Trainer:
         optimizer = AdamW(optimizer_grouped_parameters, lr=learning_rate, eps=adam_epsilon)
         scheduler = WarmupLinearSchedule(optimizer, warmup_steps=warmup_steps, t_total=num_train_optimization_steps)
 
-        if os.path.exists(output_dir) and os.listdir(output_dir):
+        if save and os.path.exists(output_dir) and os.listdir(output_dir):
             raise ValueError("Output directory (%s) already exists and is not empty." % output_dir)
         
-        if not os.path.exists(output_dir):
+        if save and not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
         device = 'cuda:1' if (torch.cuda.is_available() and not no_cuda) else 'cpu'
         logger.info(device)
         model.to(device)
         best_val_f1 = 0.0
+        best_precision = 0.0
         steps = len(x_train)%train_batch_size
         for epoch_no in range(1, epochs+1):
             logger.info("Epoch %d" % epoch_no)
@@ -168,17 +169,20 @@ class Trainer:
                     scheduler.step()
                     model.zero_grad()
             logger.info("\nTesting on validation set...")
-            f1, report = self.evaluate_model(model, x_valid, y_valid, label_map, eval_batch_size, device, max_seq_length)
+            f1, report, precision = self.evaluate_model(model, x_valid, y_valid, label_map, eval_batch_size, device, max_seq_length)
             print(report)
             if f1 > best_val_f1:
                 best_val_f1 = f1
+                best_precision = precision
                 logger.info("\nFound better f1=%.4f on validation set. Saving model\n" % f1)
                 print(report)
-                torch.save(model.state_dict(), open(os.path.join(output_dir, 'model.pt'), 'wb'))
-                save_params(output_dir, dropout, len(label_map.keys()), list(label_map.keys()))
+                if save:
+                    torch.save(model.state_dict(), open(os.path.join(output_dir, 'model.pt'), 'wb'))
+                    save_params(output_dir, dropout, len(label_map.keys()), list(label_map.keys()))
 
-            if epoch_save_model:
+            if save and epoch_save_model:
                 epoch_output_dir = os.path.join(output_dir, "e%03d" % epoch_no)
                 os.makedirs(epoch_output_dir)
                 torch.save(model.state_dict(), open(os.path.join(epoch_output_dir, 'model.pt'), 'wb'))
                 save_params(epoch_output_dir, dropout, len(label_map.keys()), list(label_map.keys()))
+        return best_val_f1, best_precision

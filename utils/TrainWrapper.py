@@ -161,7 +161,7 @@ class TrainWrapper:
         val_data = create_dataset(val_features)
         
         best_val_f1 = 0.0
-
+        best_precision = 0.0
         for epoch_no in range(1, epochs+1):
             epoch_stats = {"epoch": epoch_no}
             logger.info("Epoch %d" % epoch_no)
@@ -199,6 +199,7 @@ class TrainWrapper:
             print(report)
             if f1 > best_val_f1:
                 best_val_f1 = f1
+                best_precision = precision
                 logger.info("\nFound better f1=%.4f on validation set. Saving model\n" % f1)
                 logger.info("%s\n" % report)
                 if save:
@@ -216,7 +217,7 @@ class TrainWrapper:
         model.cpu()
         del model, logger
         torch.cuda.empty_cache()
-        return best_val_f1, entity_scores, precision
+        return best_val_f1, entity_scores, best_precision
 
 
     def evaluate(self, pretrained_path, dropout, path_model, device, num_labels, 
