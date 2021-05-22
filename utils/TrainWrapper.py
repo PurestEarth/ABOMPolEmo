@@ -13,6 +13,7 @@ import numpy as np
 import torch
 import logging
 import sys
+from timeit import default_timer as timer
 
 
 class TrainWrapper:
@@ -24,10 +25,11 @@ class TrainWrapper:
               model_name='XLMR', embedding_path=None, split_train_data=False, data_divider=0.6, wandb=None, save=True,
               logger = None, json_dataset=False, label_file=None, xlm_dataset=False, div=None, div_2 = None,
               motherfile=False, multi_source_labels=False, device = 0):
+        epoch_times = []
         if wandb:
             import wandb
             print(wandb)
-            wandb.init(project='xlmr-multitask',
+            wandb.init(project='ABOM-PolEmo',
                     config={
                         "epochs": epochs,
                         "language_model": pretrained_path,
@@ -100,7 +102,7 @@ class TrainWrapper:
             len(train_examples) / train_batch_size / gradient_accumulation_steps) * epochs
         
         hidden_size = 300 if pretrained_path == None else 768 if 'base' in pretrained_path else 1024
-        device = 'cuda:1' if (torch.cuda.is_available() and not no_cuda) else 'cpu'
+        device = 'cuda:0' if (torch.cuda.is_available() and not no_cuda) else 'cpu'
         logger.info(device)
         if model_name == 'HERBERT':
             model = AutoTokenizerForTokenClassification(
@@ -162,7 +164,9 @@ class TrainWrapper:
         
         best_val_f1 = 0.0
         best_precision = 0.0
+        best_recall = 0.0
         for epoch_no in range(1, epochs+1):
+            start = timer()
             epoch_stats = {"epoch": epoch_no}
             logger.info("Epoch %d" % epoch_no)
             tr_loss = 0
@@ -194,12 +198,13 @@ class TrainWrapper:
                     model.zero_grad()
                 del batch
             logger.info("\nTesting on validation set...")
-            f1, report, entity_scores, precision = evaluate_model(model, val_data, label_list, eval_batch_size, device)
+            f1, report, entity_scores, precision, recall = evaluate_model(model, val_data, label_list, eval_batch_size, device)
             epoch_stats["validation_F1"] = f1
             print(report)
             if f1 > best_val_f1:
                 best_val_f1 = f1
                 best_precision = precision
+                best_recall = recall
                 logger.info("\nFound better f1=%.4f on validation set. Saving model\n" % f1)
                 logger.info("%s\n" % report)
                 if save:
@@ -214,10 +219,14 @@ class TrainWrapper:
                     save_params(epoch_output_dir, dropout, num_labels, label_list)
             if wandb:
                 wandb.log(epoch_stats)
+            epoch_times.append(timer() - start)
         model.cpu()
         del model, logger
         torch.cuda.empty_cache()
-        return best_val_f1, entity_scores, best_precision
+        print("Avg. epoch time")
+        print(np.mean(epoch_times, axis=0))
+        print(max_seq_length)
+        return best_val_f1, entity_scores, best_precision, epoch_times, best_recall
 
 
     def evaluate(self, pretrained_path, dropout, path_model, device, num_labels, 

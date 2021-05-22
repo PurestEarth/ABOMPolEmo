@@ -266,8 +266,9 @@ def evaluate_model(model, eval_dataset, label_list, batch_size, device):
         del input_ids, label_ids, valid_ids, l_mask
         torch.cuda.empty_cache()
      report, entity_scores  = classification_report(y_true, y_pred, digits=4)
-     f1, precision = f1_score(y_true, y_pred, average='Macro') 
-     return f1, report, entity_scores, precision
+     f1, precision = f1_score(y_true, y_pred, average='Macro')
+     recall = recall_score(y_true, y_pred, average='Macro')
+     return f1, report, entity_scores, precision, recall
 
 
 def precision_score(y_true, y_pred, average='micro', suffix=False):

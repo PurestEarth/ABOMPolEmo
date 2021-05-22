@@ -12,7 +12,7 @@ def main(args):
         seed=args.seed,
         max_seq_length=args.max_seq_length,
         epochs=args.epochs,
-        save = False,
+        save = True,
         warmup_proportion=args.warmup_proportion, 
         data_path=args.data_dir, 
         learning_rate=args.learning_rate,

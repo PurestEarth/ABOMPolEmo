@@ -2,8 +2,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 from allennlp.commands.elmo import ElmoEmbedder
 from utils.data_utils import get_batch, save_params
-from utils.train_utils import classification_report, f1_score
+from utils.train_utils import classification_report, f1_score, recall_score
 import torch
+import numpy as np
+import random
+from timeit import default_timer as timer
 from pytorch_transformers import AdamW, WarmupLinearSchedule
 import logging
 import os
@@ -107,14 +110,16 @@ class Trainer:
                
         report = classification_report(y_true, y_pred, digits=4)
         f1, precision = f1_score(y_true, y_pred, average='Macro')
-        return f1, report, precision
+        recall = recall_score(y_true, y_pred, average='Macro')
+        return f1, report, precision, recall
 
 
     def train(self, model, x_train, y_train, label_map, epochs, train_batch_size, seed, x_valid, y_valid, gradient_accumulation_steps, output_dir, max_seq_length=128,
               weight_decay=0.01, warmup_proportion=0.1, learning_rate=0.01, adam_epsilon=1e-8, no_cuda=False, max_grad_norm=1.0, eval_batch_size=32,
-              epoch_save_model=False, dropout=0.2, save=True):
-        logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
-        logger = logging.getLogger(__name__)
+              epoch_save_model=False, dropout=0.2, save=True, logger = None):
+        if not logger:
+            logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
+            logger = logging.getLogger(__name__)
 
         num_train_optimization_steps = int(
             len(x_train) / train_batch_size / gradient_accumulation_steps) * epochs
@@ -139,11 +144,17 @@ class Trainer:
 
         device = 'cuda:1' if (torch.cuda.is_available() and not no_cuda) else 'cpu'
         logger.info(device)
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
         model.to(device)
         best_val_f1 = 0.0
         best_precision = 0.0
+        best_recall = 0.0
+        epoch_times = []
         steps = len(x_train)%train_batch_size
         for epoch_no in range(1, epochs+1):
+            start = timer()
             logger.info("Epoch %d" % epoch_no)
             tr_loss = 0
             model.train()
@@ -168,12 +179,14 @@ class Trainer:
                     optimizer.step()
                     scheduler.step()
                     model.zero_grad()
+                epoch_times.append(timer() - start)
             logger.info("\nTesting on validation set...")
-            f1, report, precision = self.evaluate_model(model, x_valid, y_valid, label_map, eval_batch_size, device, max_seq_length)
+            f1, report, precision, recall = self.evaluate_model(model, x_valid, y_valid, label_map, eval_batch_size, device, max_seq_length)
             print(report)
             if f1 > best_val_f1:
                 best_val_f1 = f1
                 best_precision = precision
+                best_recall = recall
                 logger.info("\nFound better f1=%.4f on validation set. Saving model\n" % f1)
                 print(report)
                 if save:
@@ -185,4 +198,6 @@ class Trainer:
                 os.makedirs(epoch_output_dir)
                 torch.save(model.state_dict(), open(os.path.join(epoch_output_dir, 'model.pt'), 'wb'))
                 save_params(epoch_output_dir, dropout, len(label_map.keys()), list(label_map.keys()))
-        return best_val_f1, best_precision
+        print("Avg. epoch time")
+        print(np.mean(epoch_times, axis=0))
+        return best_val_f1, best_precision, best_recall
